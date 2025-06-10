@@ -46,23 +46,72 @@ def parse_args():
         help='node rank for distributed training')
     parser.add_argument('--random_sample', action='store_true',default=True, 
         help='whether to sample the dataset with random sampler')
+    parser.add_argument('--encoder_epoch', type=int, default=100,
+        help='epoch of the DAMSM encoder to use')
+    parser.add_argument('--example_captions', type=str, default='./example_captions/coco.txt',
+        help='path to the example captions file')
     args = parser.parse_args()
     return args
 
 
 def build_word_dict(pickle_path):
-    with open(pickle_path, 'rb') as f:
-        x = pickle.load(f)
-        wordtoix = x[3]
-        del x
-        n_words = len(wordtoix)
-        print('Load from: ', pickle_path)
-    return n_words, wordtoix
-
+    try:
+        # First try the path as provided
+        if os.path.exists(pickle_path):
+            with open(pickle_path, 'rb') as f:
+                x = pickle.load(f)
+                wordtoix = x[3]
+                del x
+                n_words = len(wordtoix)
+                print('Load from: ', pickle_path)
+                return n_words, wordtoix
+        
+        # If the path doesn't exist, try to construct absolute path
+        base_dir = osp.abspath(osp.join(ROOT_PATH, ".."))
+        abs_path = osp.join(base_dir, "data", "coco", "captions_DAMSM.pickle")
+        if os.path.exists(abs_path):
+            with open(abs_path, 'rb') as f:
+                x = pickle.load(f)
+                wordtoix = x[3]
+                del x
+                n_words = len(wordtoix)
+                print('Load from: ', abs_path)
+                return n_words, wordtoix
+        
+        raise FileNotFoundError(f"Cannot find pickle file at {pickle_path} or {abs_path}")
+    except Exception as e:
+        print(f"Error loading pickle file: {e}")
+        raise
 
 def sample_example(wordtoix, netG, text_encoder, args):
     batch_size, device = args.imgs_per_sent, args.device
-    text_filepath, img_save_path = args.example_captions, args.samples_save_dir
+    
+    # Fix the path to the example captions file
+    if hasattr(args, 'example_captions'):
+        text_filepath = args.example_captions
+    else:
+        # Try different paths for the captions file
+        text_filepath = './example_captions/coco.txt'  # Default path
+        
+        # If the default path doesn't exist, try absolute paths
+        if not os.path.exists(text_filepath):
+            # Try path relative to ROOT_PATH
+            alt_path = os.path.join(ROOT_PATH, 'example_captions', 'coco.txt')
+            if os.path.exists(alt_path):
+                text_filepath = alt_path
+                print(f"Using caption file at: {text_filepath}")
+            else:
+                # Try another possible location
+                base_dir = osp.abspath(osp.join(ROOT_PATH, ".."))
+                abs_path = osp.join(base_dir, "code", "example_captions", "coco.txt")
+                if os.path.exists(abs_path):
+                    text_filepath = abs_path
+                    print(f"Using caption file at: {text_filepath}")
+    
+    print(f"Caption file path: {text_filepath}")
+    print(f"Caption file exists: {os.path.exists(text_filepath)}")
+    
+    img_save_path = args.samples_save_dir
     truncation, trunc_rate = args.truncation, args.trunc_rate
     z_dim = args.z_dim
     captions, cap_lens, _ = tokenize(wordtoix, text_filepath)
@@ -81,7 +130,8 @@ def sample_example(wordtoix, netG, text_encoder, args):
             sent_emb = sent_embs[i].unsqueeze(0).repeat(batch_size, 1)
             fakes = netG(noise, sent_emb)
             img_name = osp.join(img_save_path,'Sent%03d.png'%(i+1))
-            vutils.save_image(fakes.data, img_name, nrow=4, range=(-1, 1), normalize=True)
+            # Update parameter name from 'range' to 'value_range' for newer PyTorch versions
+            vutils.save_image(fakes.data, img_name, nrow=4, value_range=(-1, 1), normalize=True)
             torch.cuda.empty_cache()
 
 
@@ -94,6 +144,12 @@ def main(args):
         mkdir_p(args.samples_save_dir) 
     # prepare data
     pickle_path = os.path.join(args.data_dir, 'captions_DAMSM.pickle')
+    # Print debug information about paths
+    print(f"Current directory: {os.getcwd()}")
+    print(f"ROOT_PATH: {ROOT_PATH}")
+    print(f"Looking for pickle file at: {pickle_path}")
+    print(f"Checking if file exists: {os.path.exists(pickle_path)}")
+    
     args.vocab_size, wordtoix = build_word_dict(pickle_path)
     # prepare models
     _, text_encoder, netG, _, _ = prepare_models(args)

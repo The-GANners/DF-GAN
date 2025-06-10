@@ -30,8 +30,22 @@ def prepare_models(args):
     n_words = args.vocab_size
     multi_gpus = args.multi_gpus
     # image encoder
+    img_encoder_path = os.path.join(args.data_dir, 'DAMSMencoder', 'image_encoder' + str(args.encoder_epoch) + '.pth')
+    
+    # Try absolute path if original path doesn't exist
+    if not os.path.exists(img_encoder_path):
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+        abs_img_encoder_path = os.path.join(base_dir, "data", "coco", "DAMSMencoder", 
+                                           'image_encoder' + str(args.encoder_epoch) + '.pth')
+        if os.path.exists(abs_img_encoder_path):
+            img_encoder_path = abs_img_encoder_path
+            print(f"Using absolute path for image encoder: {img_encoder_path}")
+    
+    # Print debug info
+    print(f"Image encoder path: {img_encoder_path}")
+    print(f"Image encoder exists: {os.path.exists(img_encoder_path)}")
+    
     image_encoder = CNN_ENCODER(args.TEXT.EMBEDDING_DIM)
-    img_encoder_path = args.TEXT.DAMSM_NAME.replace('text_encoder', 'image_encoder')
     state_dict = torch.load(img_encoder_path, map_location='cpu')
     image_encoder = load_model_weights(image_encoder, state_dict, multi_gpus=False)
     # image_encoder.load_state_dict(state_dict)
@@ -40,8 +54,23 @@ def prepare_models(args):
         p.requires_grad = False
     image_encoder.eval()
     # text encoder
+    text_encoder_path = args.TEXT.DAMSM_NAME if hasattr(args, 'TEXT') and hasattr(args.TEXT, 'DAMSM_NAME') else os.path.join(args.data_dir, 'DAMSMencoder', 'text_encoder' + str(args.encoder_epoch) + '.pth')
+    
+    # Try absolute path if original path doesn't exist
+    if not os.path.exists(text_encoder_path):
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+        abs_text_encoder_path = os.path.join(base_dir, "data", "coco", "DAMSMencoder", 
+                                           'text_encoder' + str(args.encoder_epoch) + '.pth')
+        if os.path.exists(abs_text_encoder_path):
+            text_encoder_path = abs_text_encoder_path
+            print(f"Using absolute path for text encoder: {text_encoder_path}")
+    
+    # Print debug info
+    print(f"Text encoder path: {text_encoder_path}")
+    print(f"Text encoder exists: {os.path.exists(text_encoder_path)}")
+    
     text_encoder = RNN_ENCODER(n_words, nhidden=args.TEXT.EMBEDDING_DIM)
-    state_dict = torch.load(args.TEXT.DAMSM_NAME, map_location='cpu')
+    state_dict = torch.load(text_encoder_path, map_location='cpu')
     text_encoder = load_model_weights(text_encoder, state_dict, multi_gpus=False)
     text_encoder.cuda()
     for p in text_encoder.parameters():
