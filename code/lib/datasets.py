@@ -127,12 +127,12 @@ class TextImgDataset(data.Dataset):
 
     def load_bbox(self):
         data_dir = self.data_dir
-        bbox_path = os.path.join(data_dir, 'CUB_200_2011/bounding_boxes.txt')
+        bbox_path = os.path.join(data_dir, 'bounding_boxes.txt')
         df_bounding_boxes = pd.read_csv(bbox_path,
                                         delim_whitespace=True,
                                         header=None).astype(int)
         #
-        filepath = os.path.join(data_dir, 'CUB_200_2011/images.txt')
+        filepath = os.path.join(data_dir, 'images.txt')
         df_filenames = \
             pd.read_csv(filepath, delim_whitespace=True, header=None)
         filenames = df_filenames[1].tolist()
@@ -299,7 +299,7 @@ class TextImgDataset(data.Dataset):
         #
         if self.bbox is not None:
             bbox = self.bbox[key]
-            data_dir = '%s/CUB_200_2011' % self.data_dir
+            data_dir = self.data_dir
         else:
             bbox = None
             data_dir = self.data_dir
@@ -320,7 +320,7 @@ class TextImgDataset(data.Dataset):
             else:
                 img_name = '%s/image/CelebA-HQ-img/%s.jpg' % (data_dir, key)
         else:
-            img_name = '%s/images/%s.jpg' % (data_dir, key)
+            img_name = os.path.join(data_dir, 'images', key + '.jpg')
 
         imgs = get_imgs(img_name, bbox, self.transform, normalize=self.norm)
         # random select a sentence

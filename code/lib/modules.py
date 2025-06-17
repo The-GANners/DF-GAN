@@ -301,11 +301,12 @@ def sample_one_batch(noise, sent, netG, multi_gpus, epoch, img_save_dir, writer)
         None
     else:
         if writer!=None:
-            fixed_grid = make_grid(fixed_results.cpu(), nrow=8, range=(-1, 1), normalize=True)
+            # Change 'range' to 'value_range'
+            fixed_grid = make_grid(fixed_results.cpu(), nrow=8, value_range=(-1, 1), normalize=True)
             writer.add_image('fixed results', fixed_grid, epoch)
         img_name = 'samples_epoch_%03d.png'%(epoch)
         img_save_path = osp.join(img_save_dir, img_name)
-        vutils.save_image(fixed_results.data, img_save_path, nrow=8, range=(-1, 1), normalize=True)
+        vutils.save_image(fixed_results.data, img_save_path, nrow=8, value_range=(-1, 1), normalize=True)
 
 
 def generate_samples(noise, caption, model):

@@ -174,6 +174,9 @@ def main(args):
 
 if __name__ == "__main__":
     args = merge_args_yaml(parse_args())
+    # Force num_workers to 15 regardless of config file
+    args.num_workers = 15
+    
     # set seed
     if args.manual_seed is None:
         args.manual_seed = 100

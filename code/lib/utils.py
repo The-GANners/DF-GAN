@@ -70,6 +70,9 @@ def merge_args_yaml(args):
         args = load_yaml(args.cfg_file)
         args.update(opt)
         args = edict(args)
+    
+    # Override certain parameters with command-line args
+    args.num_workers = getattr(args, 'num_workers', 4)  # default to 4 if not set
     return args
 
 
