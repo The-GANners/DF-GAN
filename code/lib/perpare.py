@@ -124,29 +124,5 @@ def prepare_dataloaders(args, transform=None):
         num_workers=num_workers, shuffle=True)
     return train_dataloader, valid_dataloader, \
             train_dataset, valid_dataset, train_sampler
-    num_workers = args.num_workers
-    train_dataset, valid_dataset = prepare_datasets(args, transform)
-    # train dataloader
-    if args.multi_gpus==True:
-        train_sampler = DistributedSampler(train_dataset)
-        train_dataloader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, drop_last=True,
-            num_workers=num_workers, sampler=train_sampler)
-    else:
-        train_sampler = None
-        train_dataloader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, drop_last=True,
-            num_workers=num_workers, shuffle='True')
-    # valid dataloader
-    if args.multi_gpus==True:
-        valid_sampler = DistributedSampler(valid_dataset)
-        valid_dataloader = torch.utils.data.DataLoader(
-            valid_dataset, batch_size=batch_size, drop_last=True,
-            num_workers=num_workers, sampler=valid_sampler)
-    else:
-        valid_dataloader = torch.utils.data.DataLoader(
-            valid_dataset, batch_size=batch_size, drop_last=True,
-            num_workers=num_workers, shuffle='True')
-    return train_dataloader, valid_dataloader, \
-            train_dataset, valid_dataset, train_sampler
+    
 

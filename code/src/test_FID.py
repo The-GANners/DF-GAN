@@ -27,8 +27,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='DF-GAN')
     parser.add_argument('--cfg', dest='cfg_file', type=str, default='./cfg/model/coco.yml',
                         help='optional config file')
-    parser.add_argument('--num_workers', type=int, default=4,
-                        help='number of workers(default: 4)')
+    parser.add_argument('--num_workers', type=int, default=15,
+                        help='number of workers(default: 15)')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='batch size')
     parser.add_argument('--train', type=bool, default=False,

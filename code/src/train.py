@@ -26,8 +26,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Text2Img')
     parser.add_argument('--cfg', dest='cfg_file', type=str, default='../cfg/model/coco.yml',
                         help='optional config file')
-    parser.add_argument('--num_workers', type=int, default=14,
-                        help='number of workers(default: 14)')
+    parser.add_argument('--num_workers', type=int, default=15,
+                        help='number of workers(default: 15)')
     parser.add_argument('--stamp', type=str, default='normal',
                         help='the stamp of model')
     parser.add_argument('--imsize', type=int, default=256,
