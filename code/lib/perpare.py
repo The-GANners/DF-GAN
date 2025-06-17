@@ -17,7 +17,6 @@ import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torchvision.utils import save_image, make_grid
 from torch.utils.data import DataLoader, random_split
-from torch.utils.data.distributed import DistributedSampler
 
 from lib.utils import mkdir_p, get_rank, load_model_weights
 from models.DAMSM import RNN_ENCODER, CNN_ENCODER
@@ -80,17 +79,6 @@ def prepare_models(args):
     netG = NetG(args.nf, args.z_dim, args.cond_dim, args.imsize, args.ch_size).to(device)
     netD = NetD(args.nf, args.imsize, args.ch_size).to(device)
     netC = NetC(args.nf, args.cond_dim).to(device)
-    if (args.multi_gpus) and (args.train):
-        print("Let's use", torch.cuda.device_count(), "GPUs!")
-        netG = torch.nn.parallel.DistributedDataParallel(netG, broadcast_buffers=False,
-                                                          device_ids=[local_rank],
-                                                          output_device=local_rank, find_unused_parameters=True)
-        netD = torch.nn.parallel.DistributedDataParallel(netD, broadcast_buffers=False,
-                                                          device_ids=[local_rank],
-                                                          output_device=local_rank, find_unused_parameters=True)
-        netC = torch.nn.parallel.DistributedDataParallel(netC, broadcast_buffers=False,
-                                                          device_ids=[local_rank],
-                                                          output_device=local_rank, find_unused_parameters=True)
     return image_encoder, text_encoder, netG, netD, netC
 
 
@@ -124,6 +112,18 @@ def prepare_datasets(args, transform):
 
 def prepare_dataloaders(args, transform=None):
     batch_size = args.batch_size
+    num_workers = args.num_workers
+    train_dataset, valid_dataset = prepare_datasets(args, transform)
+    # Always use single GPU/CPU DataLoader
+    train_sampler = None
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=batch_size, drop_last=True,
+        num_workers=num_workers, shuffle=True)
+    valid_dataloader = torch.utils.data.DataLoader(
+        valid_dataset, batch_size=batch_size, drop_last=True,
+        num_workers=num_workers, shuffle=True)
+    return train_dataloader, valid_dataloader, \
+            train_dataset, valid_dataset, train_sampler
     num_workers = args.num_workers
     train_dataset, valid_dataset = prepare_datasets(args, transform)
     # train dataloader

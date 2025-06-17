@@ -8,3 +8,4 @@
 *.zip
 **/saved_models/*
 **/__pycache__**
+.venv

@@ -17,7 +17,6 @@ import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torchvision.utils import save_image, make_grid
 from torch.utils.data import DataLoader, random_split
-from torch.utils.data.distributed import DistributedSampler
 from lib.utils import truncated_noise
 from lib.utils import mkdir_p, get_rank
 
@@ -26,7 +25,6 @@ from lib.datasets import prepare_data, encode_tokens
 from models.inception import InceptionV3
 
 from torch.nn.functional import adaptive_avg_pool2d
-import torch.distributed as dist
 
 
 ############   modules   ############
@@ -37,10 +35,7 @@ def train(dataloader, netG, netD, netC, text_encoder, optimizerG, optimizerD, ar
     max_epoch = args.max_epoch
     z_dim = args.z_dim
     netG, netD, netC = netG.train(), netD.train(), netC.train()
-    if (args.multi_gpus==True) and (get_rank() != 0):
-        None
-    else:
-        loop = tqdm(total=len(dataloader))
+    loop = tqdm(total=len(dataloader))
     for step, data in enumerate(dataloader, 0):
         # prepare_data
         imgs, sent_emb, words_embs, keys = prepare_data(data, text_encoder)
@@ -74,16 +69,10 @@ def train(dataloader, netG, netD, netC, text_encoder, optimizerG, optimizerD, ar
         errG.backward()
         optimizerG.step()
         # update loop information
-        if (args.multi_gpus==True) and (get_rank() != 0):
-            None
-        else:
-            loop.update(1)
-            loop.set_description(f'Training Epoch [{epoch}/{max_epoch}]')
-            loop.set_postfix()
-    if (args.multi_gpus==True) and (get_rank() != 0):
-        None
-    else:
-        loop.close()
+        loop.update(1)
+        loop.set_description(f'Training Epoch [{epoch}/{max_epoch}]')
+        loop.set_postfix()
+    loop.close()
 
 
 def sample(dataloader, netG, text_encoder, save_dir, device, multi_gpus, z_dim, stamp, truncation, trunc_rate, times):
@@ -148,14 +137,11 @@ def calculate_fid(dataloader, text_encoder, netG, device, m1, s1, epoch, max_epo
         transforms.Normalize((-1, -1, -1), (2, 2, 2)),
         transforms.Resize((299, 299)),
         ])
-    n_gpu = dist.get_world_size()
+    n_gpu = 1  # Always 1 for single GPU/CPU
     dl_length = dataloader.__len__()
     imgs_num = dl_length * n_gpu * batch_size * times
     pred_arr = np.empty((imgs_num, dims))
-    if (n_gpu!=1) and (get_rank() != 0):
-        None
-    else:
-        loop = tqdm(total=int(dl_length*times))
+    loop = tqdm(total=int(dl_length*times))
     for time in range(times):
         for i, data in enumerate(dataloader):
             start = i * batch_size * n_gpu + time * dl_length * n_gpu * batch_size
@@ -181,22 +167,14 @@ def calculate_fid(dataloader, text_encoder, netG, device, m1, s1, epoch, max_epo
                 pred = model(fake)[0]
                 if pred.shape[2] != 1 or pred.shape[3] != 1:
                     pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
-                # concat pred from multi GPUs
-                output = list(torch.empty_like(pred) for _ in range(n_gpu))
-                dist.all_gather(output, pred)
-                pred_all = torch.cat(output, dim=0).squeeze(-1).squeeze(-1)
+                # Remove all_gather and distributed logic
+                pred_all = pred.squeeze(-1).squeeze(-1)
                 pred_arr[start:end] = pred_all.cpu().data.numpy()
             # update loop information
-            if (n_gpu!=1) and (get_rank() != 0):
-                None
-            else:
-                loop.update(1)
-                loop.set_description(f'Evaluate Epoch [{epoch}/{max_epoch}]')
-                loop.set_postfix()
-    if (n_gpu!=1) and (get_rank() != 0):
-        None
-    else:
-        loop.close()
+            loop.update(1)
+            loop.set_description(f'Evaluate Epoch [{epoch}/{max_epoch}]')
+            loop.set_postfix()
+    loop.close()
     m2 = np.mean(pred_arr, axis=0)
     s2 = np.cov(pred_arr, rowvar=False)
     fid_value = calculate_frechet_distance(m1, s1, m2, s2)
@@ -217,15 +195,12 @@ def eval(dataloader, text_encoder, netG, device, m1, s1, save_imgs, save_dir,
         transforms.Normalize((-1, -1, -1), (2, 2, 2)),
         transforms.Resize((299, 299)),
         ])
-    n_gpu = dist.get_world_size()
+    n_gpu = 1  # Always 1 for single GPU/CPU
     dl_length = dataloader.__len__()
 
     imgs_num = dl_length * n_gpu * batch_size * times
     pred_arr = np.empty((imgs_num, dims))
-    if (n_gpu!=1) and (get_rank() != 0):
-        None
-    else:
-        loop = tqdm(total=int(dl_length*times))
+    loop = tqdm(total=int(dl_length*times))
     for time in range(times):
         for i, data in enumerate(dataloader):
             start = i * batch_size * n_gpu + time * dl_length * n_gpu * batch_size
@@ -253,22 +228,14 @@ def eval(dataloader, text_encoder, netG, device, m1, s1, save_imgs, save_dir,
                 pred = model(fake)[0]
                 if pred.shape[2] != 1 or pred.shape[3] != 1:
                     pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
-                # concat pred from multi GPUs
-                output = list(torch.empty_like(pred) for _ in range(n_gpu))
-                dist.all_gather(output, pred)
-                pred_all = torch.cat(output, dim=0).squeeze(-1).squeeze(-1)
+                # Remove all_gather and distributed logic
+                pred_all = pred.squeeze(-1).squeeze(-1)
                 pred_arr[start:end] = pred_all.cpu().data.numpy()
             # update loop information
-            if (n_gpu!=1) and (get_rank() != 0):
-                None
-            else:
-                loop.update(1)
-                loop.set_description(f'Evaluating:')
-                loop.set_postfix()
-    if (n_gpu!=1) and (get_rank() != 0):
-        None
-    else:
-        loop.close()
+            loop.update(1)
+            loop.set_description(f'Evaluating:')
+            loop.set_postfix()
+    loop.close()
     m2 = np.mean(pred_arr, axis=0)
     s2 = np.cov(pred_arr, rowvar=False)
     fid_value = calculate_frechet_distance(m1, s1, m2, s2)
@@ -351,7 +318,7 @@ def generate_samples(noise, caption, model):
 def MA_GP(img, sent, out):
     grads = torch.autograd.grad(outputs=out,
                             inputs=(img, sent),
-                            grad_outputs=torch.ones(out.size()).cuda(),
+                            grad_outputs=torch.ones(out.size(), device=out.device),
                             retain_graph=True,
                             create_graph=True,
                             only_inputs=True)
@@ -361,6 +328,32 @@ def MA_GP(img, sent, out):
     grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
     d_loss_gp =  2.0 * torch.mean((grad_l2norm) ** 6)
     return d_loss_gp
+
+
+def predict_loss(predictor, img_feature, text_feature, negtive):
+    output = predictor(img_feature, text_feature)
+    err = hinge_loss(output, negtive)
+    return output,err
+
+
+def hinge_loss(output, negtive):
+    if negtive==False:
+        err = torch.nn.ReLU()(1.0 - output).mean()
+    else:
+        err = torch.nn.ReLU()(1.0 + output).mean()
+    return err
+
+
+def logit_loss(output, negtive):
+    batch_size = output.size(0)
+    real_labels = torch.FloatTensor(batch_size,1).fill_(1).to(output.device)
+    fake_labels = torch.FloatTensor(batch_size,1).fill_(0).to(output.device)
+    output = nn.Sigmoid()(output)
+    if negtive==False:
+        err = nn.BCELoss()(output, real_labels)
+    else:
+        err = nn.BCELoss()(output, fake_labels)
+    return err
 
 
 def predict_loss(predictor, img_feature, text_feature, negtive):

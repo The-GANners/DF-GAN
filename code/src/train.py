@@ -26,8 +26,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Text2Img')
     parser.add_argument('--cfg', dest='cfg_file', type=str, default='../cfg/model/coco.yml',
                         help='optional config file')
-    parser.add_argument('--num_workers', type=int, default=4,
-                        help='number of workers(default: 4)')
+    parser.add_argument('--num_workers', type=int, default=14,
+                        help='number of workers(default: 14)')
     parser.add_argument('--stamp', type=str, default='normal',
                         help='the stamp of model')
     parser.add_argument('--imsize', type=int, default=256,
@@ -48,6 +48,8 @@ def parse_args():
                         help='node rank for distributed training')
     parser.add_argument('--random_sample', action='store_true',default=True, 
                         help='whether to sample the dataset with random sampler')
+    parser.add_argument('--encoder_epoch', type=int, default=100,
+                        help='epoch of the DAMSM encoder to use')
     args = parser.parse_args()
     return args
 
@@ -146,19 +148,29 @@ if __name__ == "__main__":
     random.seed(args.manual_seed)
     np.random.seed(args.manual_seed)
     torch.manual_seed(args.manual_seed)
+    
+    # Handle CUDA setup safely
     if args.cuda:
-        if args.multi_gpus:
-            torch.cuda.manual_seed_all(args.manual_seed)
-            torch.distributed.init_process_group(backend="nccl")
-            local_rank = torch.distributed.get_rank()
-            torch.cuda.set_device(local_rank)
-            args.device = torch.device("cuda", local_rank)
-            args.local_rank = local_rank
-        else:
-            torch.cuda.manual_seed_all(args.manual_seed)
+        torch.cuda.manual_seed_all(args.manual_seed)
+        # Check if CUDA is available
+        if torch.cuda.is_available():
+            # Check if the specified GPU is valid
+            gpu_count = torch.cuda.device_count()
+            if args.gpu_id >= gpu_count:
+                print(f"Warning: GPU {args.gpu_id} requested but only {gpu_count} GPUs available. Using GPU 0.")
+                args.gpu_id = 0
             torch.cuda.set_device(args.gpu_id)
             args.device = torch.device("cuda")
+            print(f"Using GPU {args.gpu_id}: {torch.cuda.get_device_name(args.gpu_id)}")
+        else:
+            print("CUDA is not available. Using CPU instead.")
+            args.device = torch.device('cpu')
+            args.cuda = False
     else:
         args.device = torch.device('cpu')
+    
+    args.local_rank = 0  # Always 0 for single GPU/CPU
+    args.multi_gpus = False  # Force single GPU mode
     main(args)
+
 
