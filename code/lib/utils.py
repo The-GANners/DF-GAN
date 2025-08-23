@@ -93,13 +93,17 @@ def load_opt_weights(optimizer, weights):
     return optimizer
 
 
-def load_model_opt(netG, netD, netC, optim_G, optim_D, path, multi_gpus):
+def load_model_opt(netG, netD, netC, optim_G, optim_D, path, multi_gpus,ema_G=None):
     checkpoint = torch.load(path, map_location=torch.device('cpu'))
     netG = load_model_weights(netG, checkpoint['model']['netG'], multi_gpus)
     netD = load_model_weights(netD, checkpoint['model']['netD'], multi_gpus)
     netC = load_model_weights(netC, checkpoint['model']['netC'], multi_gpus)
     optim_G = load_opt_weights(optim_G, checkpoint['optimizers']['optimizer_G'])
     optim_D = load_opt_weights(optim_D, checkpoint['optimizers']['optimizer_D'])
+    if ema_G is not None and 'ema_G' in checkpoint:
+        ema_G.load_state_dict(checkpoint['ema_G'])
+        print("=> EMA weights loaded")
+
     return netG, netD, netC, optim_G, optim_D
 
 
@@ -136,13 +140,15 @@ def load_model_weights(model, weights, multi_gpus, train=True):
     return model
 
 
-def save_models(netG, netD, netC, optG, optD, epoch, multi_gpus, save_path):
+def save_models(netG, netD, netC, optG, optD, epoch, multi_gpus, save_path, ema_G=None):
     if (multi_gpus==True) and (get_rank() != 0):
         None
     else:
         state = {'model': {'netG': netG.state_dict(), 'netD': netD.state_dict(), 'netC': netC.state_dict()}, \
                 'optimizers': {'optimizer_G': optG.state_dict(), 'optimizer_D': optD.state_dict()},\
                 'epoch': epoch}
+        if ema_G is not None:
+         state['ema_G'] = ema_G.state_dict()
         torch.save(state, '%s/state_epoch_%03d.pth' % (save_path, epoch))
 
 

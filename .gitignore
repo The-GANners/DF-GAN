@@ -9,3 +9,9 @@
 **/saved_models/*
 **/__pycache__**
 .venv
+Images/
+text_c10/
+alignment_samples/
+example_captions/
+venv/
+tools/

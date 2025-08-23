@@ -106,8 +106,9 @@ class TextImgDataset(data.Dataset):
         self.transform = transform
         self.word_num = args.TEXT.WORDS_NUM
         self.embeddings_num = args.TEXT.CAPTIONS_PER_IMAGE
-        self.data_dir = args.data_dir
-        self.dataset_name = args.dataset_name
+        # --- Fix: Support both data_dir/DATA_DIR and dataset_name/DATASET_NAME ---
+        self.data_dir = getattr(args, 'data_dir', getattr(args, 'DATA_DIR', None))
+        self.dataset_name = getattr(args, 'dataset_name', getattr(args, 'DATASET_NAME', None))
         self.norm = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
@@ -121,6 +122,10 @@ class TextImgDataset(data.Dataset):
 
         self.filenames, self.captions, self.ixtoword, \
             self.wordtoix, self.n_words = self.load_text_data(self.data_dir, split)
+
+        if not self.filenames or len(self.filenames) == 0:
+            raise RuntimeError(f"No filenames loaded for split '{split}' from {self.data_dir}. "
+                               f"Check that {os.path.join(self.data_dir, split, 'filenames.pickle')} exists and is not empty.")
 
         self.class_id = self.load_class_id(split_dir, len(self.filenames))
         self.number_example = len(self.filenames)
@@ -223,7 +228,10 @@ class TextImgDataset(data.Dataset):
                 ixtoword, wordtoix, len(ixtoword)]
 
     def load_text_data(self, data_dir, split):
-        filepath = os.path.join(data_dir, 'captions_DAMSM.pickle')
+        # Always use absolute path for captions_DAMSM.pickle
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        filepath = os.path.join(project_root, 'data', 'flower', 'captions_DAMSM.pickle')
+        print("Looking for captions_DAMSM.pickle at:", filepath)
         train_names = self.load_filenames(data_dir, 'train')
         test_names = self.load_filenames(data_dir, 'test')
         if not os.path.isfile(filepath):
@@ -245,8 +253,6 @@ class TextImgDataset(data.Dataset):
                 n_words = len(ixtoword)
                 print('Load from: ', filepath)
         if split == 'train':
-            # a list of list: each list contains
-            # the indices of words in a sentence
             captions = train_captions
             filenames = train_names
         else:  # split=='test'
@@ -263,12 +269,16 @@ class TextImgDataset(data.Dataset):
         return class_id
 
     def load_filenames(self, data_dir, split):
-        filepath = '%s/%s/filenames.pickle' % (data_dir, split)
+        # Always use absolute path for filenames.pickle
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        filepath = os.path.join(project_root, 'data', 'flower', split, 'filenames.pickle')
+        print(f"Looking for filenames.pickle at: {filepath}")
         if os.path.isfile(filepath):
             with open(filepath, 'rb') as f:
                 filenames = pickle.load(f)
             print('Load filenames from: %s (%d)' % (filepath, len(filenames)))
         else:
+            print(f"File not found: {filepath}")
             filenames = []
         return filenames
 
@@ -299,33 +309,38 @@ class TextImgDataset(data.Dataset):
         #
         if self.bbox is not None:
             bbox = self.bbox[key]
-            data_dir = self.data_dir
         else:
             bbox = None
-            data_dir = self.data_dir
         #
-        if self.dataset_name.find('coco') != -1:
+        # --- Always use absolute path for flower images ---
+        if self.dataset_name and self.dataset_name.lower().find('flower') != -1:
+            img_name = os.path.abspath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "../../data/flower/images",
+                    key + ".jpg"
+                )
+            )
+        elif self.dataset_name and self.dataset_name.lower().find('coco') != -1:
             if self.split=='train':
-                img_name = '%s/images/train2014/%s.jpg' % (data_dir, key)
+                img_name = '%s/images/train2014/%s.jpg' % (self.data_dir, key)
             else:
-                img_name = '%s/images/val2014/%s.jpg' % (data_dir, key)
-        elif self.dataset_name.find('flower') != -1:
-            if self.split=='train':
-                img_name = '%s/oxford-102-flowers/images/%s.jpg' % (data_dir, key)
-            else:
-                img_name = '%s/oxford-102-flowers/images/%s.jpg' % (data_dir, key)
-        elif self.dataset_name.find('CelebA') != -1:
-            if self.split=='train':
-                img_name = '%s/image/CelebA-HQ-img/%s.jpg' % (data_dir, key)
-            else:
-                img_name = '%s/image/CelebA-HQ-img/%s.jpg' % (data_dir, key)
+                img_name = '%s/images/val2014/%s.jpg' % (self.data_dir, key)
+        elif self.dataset_name and self.dataset_name.lower().find('celeb') != -1:
+            img_name = os.path.join(self.data_dir, 'image', 'CelebA-HQ-img', key + '.jpg')
         else:
-            img_name = os.path.join(data_dir, 'images', key + '.jpg')
+            img_name = os.path.join(self.data_dir, 'images', key + '.jpg')
 
         imgs = get_imgs(img_name, bbox, self.transform, normalize=self.norm)
         # random select a sentence
         sent_ix = random.randint(0, self.embeddings_num)
         new_sent_ix = index * self.embeddings_num + sent_ix
+        # --- Fix: Prevent out-of-range index for captions ---
+        if new_sent_ix >= len(self.captions):
+            # fallback to a valid index
+            new_sent_ix = index * self.embeddings_num
+            if new_sent_ix >= len(self.captions):
+                new_sent_ix = 0
         caps, cap_len = self.get_caption(new_sent_ix)
         return imgs, caps, cap_len, key
 

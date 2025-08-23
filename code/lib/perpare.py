@@ -26,56 +26,63 @@ from models.GAN import NetG, NetD, NetC
 def prepare_models(args):
     device = args.device
     local_rank = args.local_rank
-    n_words = args.vocab_size
     multi_gpus = args.multi_gpus
-    # image encoder
-    img_encoder_path = os.path.join(args.data_dir, 'DAMSMencoder', 'image_encoder' + str(args.encoder_epoch) + '.pth')
-    
-    # Try absolute path if original path doesn't exist
-    if not os.path.exists(img_encoder_path):
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-        abs_img_encoder_path = os.path.join(base_dir, "data", "coco", "DAMSMencoder", 
-                                           'image_encoder' + str(args.encoder_epoch) + '.pth')
-        if os.path.exists(abs_img_encoder_path):
-            img_encoder_path = abs_img_encoder_path
-            print(f"Using absolute path for image encoder: {img_encoder_path}")
-    
+    data_dir = getattr(args, 'data_dir', getattr(args, 'DATA_DIR', None))
+
+    # --- Force flower encoder paths and vocab size if using flower dataset ---
+    if data_dir and ('flower' in data_dir.lower()):
+        img_encoder_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../data/flower/DAMSMencoder/image_encoder100.pth")
+        )
+        text_encoder_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../data/flower/DAMSMencoder/text_encoder100.pth")
+        )
+        vocab_size = 5428  # Hardcode for flower dataset
+        print(f"Forced flower image encoder path: {img_encoder_path}")
+        print(f"Forced flower text encoder path: {text_encoder_path}")
+        print(f"Forced flower vocab size: {vocab_size}")
+    else:
+        # Use encoder_epoch parameter from args instead of hardcoded 200
+        encoder_epoch = args.encoder_epoch  # This allows specifying the epoch (default 100)
+        img_encoder_path = os.path.join(args.data_dir, 'DAMSMencoder', f'image_encoder{encoder_epoch}.pth')
+        text_encoder_path = os.path.join(args.data_dir, 'DAMSMencoder', f'text_encoder{encoder_epoch}.pth')
+        
+        print(f"Loading image encoder from: {img_encoder_path}")
+        print(f"Loading text encoder from: {text_encoder_path}")
+
+        # Check if the encoder files exist
+        if not os.path.exists(img_encoder_path):
+            print(f"Warning: {img_encoder_path} not found. Trying to use image_encoder100.pth instead.")
+            img_encoder_path = os.path.join(args.data_dir, 'DAMSMencoder', 'image_encoder100.pth')
+            
+        if not os.path.exists(text_encoder_path):
+            print(f"Warning: {text_encoder_path} not found. Trying to use text_encoder100.pth instead.")
+            text_encoder_path = os.path.join(args.data_dir, 'DAMSMencoder', 'text_encoder100.pth')
+            
+        vocab_size = args.vocab_size
+
     # Print debug info
     print(f"Image encoder path: {img_encoder_path}")
     print(f"Image encoder exists: {os.path.exists(img_encoder_path)}")
-    
     image_encoder = CNN_ENCODER(args.TEXT.EMBEDDING_DIM)
     state_dict = torch.load(img_encoder_path, map_location='cpu')
     image_encoder = load_model_weights(image_encoder, state_dict, multi_gpus=False)
-    # image_encoder.load_state_dict(state_dict)
     image_encoder.to(device)
     for p in image_encoder.parameters():
         p.requires_grad = False
     image_encoder.eval()
-    # text encoder
-    text_encoder_path = args.TEXT.DAMSM_NAME if hasattr(args, 'TEXT') and hasattr(args.TEXT, 'DAMSM_NAME') else os.path.join(args.data_dir, 'DAMSMencoder', 'text_encoder' + str(args.encoder_epoch) + '.pth')
-    
-    # Try absolute path if original path doesn't exist
-    if not os.path.exists(text_encoder_path):
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-        abs_text_encoder_path = os.path.join(base_dir, "data", "coco", "DAMSMencoder", 
-                                           'text_encoder' + str(args.encoder_epoch) + '.pth')
-        if os.path.exists(abs_text_encoder_path):
-            text_encoder_path = abs_text_encoder_path
-            print(f"Using absolute path for text encoder: {text_encoder_path}")
-    
-    # Print debug info
+
     print(f"Text encoder path: {text_encoder_path}")
     print(f"Text encoder exists: {os.path.exists(text_encoder_path)}")
-    
-    text_encoder = RNN_ENCODER(n_words, nhidden=args.TEXT.EMBEDDING_DIM)
+    text_encoder = RNN_ENCODER(vocab_size, nhidden=args.TEXT.EMBEDDING_DIM)
     state_dict = torch.load(text_encoder_path, map_location='cpu')
     text_encoder = load_model_weights(text_encoder, state_dict, multi_gpus=False)
-    text_encoder.cuda()
+    # Move text encoder to the configured device (supports CPU or CUDA)
+    text_encoder.to(device)
     for p in text_encoder.parameters():
         p.requires_grad = False
     text_encoder.eval()
-    # GAN models
+
     netG = NetG(args.nf, args.z_dim, args.cond_dim, args.imsize, args.ch_size).to(device)
     netD = NetD(args.nf, args.imsize, args.ch_size).to(device)
     netC = NetC(args.nf, args.cond_dim).to(device)
@@ -84,9 +91,11 @@ def prepare_models(args):
 
 def prepare_dataset(args, split, transform):
     imsize = args.imsize
+    # --- Fix: Use CONFIG_NAME if present, else fallback to DATASET_NAME ---
+    config_name = getattr(args, 'CONFIG_NAME', getattr(args, 'DATASET_NAME', ''))
     if transform is not None:
         image_transform = transform
-    elif args.CONFIG_NAME.find('CelebA') != -1:
+    elif config_name.find('CelebA') != -1:
         image_transform = transforms.Compose([
             transforms.Resize(int(imsize)),
             transforms.RandomCrop(imsize),
@@ -124,5 +133,5 @@ def prepare_dataloaders(args, transform=None):
         num_workers=num_workers, shuffle=True)
     return train_dataloader, valid_dataloader, \
             train_dataset, valid_dataset, train_sampler
-    
+
 

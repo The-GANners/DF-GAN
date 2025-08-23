@@ -28,7 +28,7 @@ from torch.nn.functional import adaptive_avg_pool2d
 
 
 ############   modules   ############
-def train(dataloader, netG, netD, netC, text_encoder, optimizerG, optimizerD, args):
+def train(dataloader, netG, netD, netC, text_encoder, optimizerG, optimizerD, ema_G, args):
     batch_size = args.batch_size
     device = args.device
     epoch = args.current_epoch
@@ -68,6 +68,7 @@ def train(dataloader, netG, netD, netC, text_encoder, optimizerG, optimizerD, ar
         optimizerG.zero_grad()
         errG.backward()
         optimizerG.step()
+        ema_G.update(netG)
         # update loop information
         loop.update(1)
         loop.set_description(f'Training Epoch [{epoch}/{max_epoch}]')
@@ -116,8 +117,10 @@ def sample(dataloader, netG, text_encoder, save_dir, device, multi_gpus, z_dim, 
             im.save(fullpath)
 
 
-def test(dataloader, text_encoder, netG, device, m1, s1, epoch, max_epoch,
-                    times=1, z_dim=100, batch_size=64, truncation=True, trunc_rate=0.8):
+def test(dataloader, text_encoder, netG, ema_G, device, m1, s1, epoch, max_epoch,
+                    times=1, z_dim=100, batch_size=64, truncation=True, trunc_rate=0.7):
+    original_netG_weights = netG.state_dict()
+    netG.load_state_dict(ema_G.ema_model.state_dict(), strict=False)
     fid = calculate_fid(dataloader, text_encoder, netG, device, m1, s1, epoch, max_epoch, \
                         times, z_dim, batch_size, truncation, trunc_rate)
     return fid
@@ -165,11 +168,15 @@ def calculate_fid(dataloader, text_encoder, netG, device, m1, s1, epoch, max_epo
                 fake_imgs = netG(noise,sent_emb)
                 fake = norm(fake_imgs)
                 pred = model(fake)[0]
-                if pred.shape[2] != 1 or pred.shape[3] != 1:
-                    pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
-                # Remove all_gather and distributed logic
+                # If pred shape doesn't match dims, fix it
                 pred_all = pred.squeeze(-1).squeeze(-1)
-                pred_arr[start:end] = pred_all.cpu().data.numpy()
+                # --- Fix: Check feature dimension and warn if mismatch ---
+                if pred_all.shape[1] != m1.shape[0]:
+                    print(f"WARNING: Inception feature dim {pred_all.shape[1]} does not match FID stats dim {m1.shape[0]}.")
+                    print(f"Generated features shape: {pred_all.shape}, FID stats mu shape: {m1.shape}, sigma shape: {s1.shape}")
+                    print("You must regenerate your FID .npz stats using the same Inception feature dimension as used here (default 2048).")
+                    raise ValueError("Inception feature dimension mismatch for FID computation.")
+            pred_arr[start:end] = pred_all.cpu().data.numpy()
             # update loop information
             loop.update(1)
             loop.set_description(f'Evaluate Epoch [{epoch}/{max_epoch}]')

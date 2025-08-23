@@ -1,20 +1,20 @@
-ONFIG_NAME: 'flower'
+CONFIG_NAME: 'flower'
 
 DATASET_NAME: 'flower'
 DATA_DIR: 'data/flower'
 GPU_ID: 0
-WORKERS: 8
+WORKERS: 4
 
 # Training options
 TRAIN:
     FLAG: True
     NET_G: ''
     B_NET_D: True
-    BATCH_SIZE: 16
+    BATCH_SIZE: 8
     MAX_EPOCH: 600
     SNAPSHOT_INTERVAL: 5
-    DISCRIMINATOR_LR: 1.8e-4
-    GENERATOR_LR: 2.0e-4
+    DISCRIMINATOR_LR: 0.0002
+    GENERATOR_LR: 0.0002
     GENERATOR_WEIGHT_DECAY: 0.0
     DISCRIMINATOR_WEIGHT_DECAY: 0.0
     SMOOTH:
@@ -35,26 +35,24 @@ TEXT:
     EMBEDDING_DIM: 256
     CAPTIONS_PER_IMAGE: 10
     WORDS_NUM: 18
-    # Use your flower encoders
-    DAMSM_NAME: 'data/flower/DAMSMencoder/text_encoder100.pth'
-    CNN_ENCODER_PATH: 'data/flower/DAMSMencoder/image_encoder100.pth'
+    DAMSM_NAME: 'data/flower/DAMSMencoder/text_encoder200.pth'
+    CNN_ENCODER_PATH: 'data/flower/DAMSMencoder/image_encoder200.pth'
 
-# Evaluation options
-EVAL:
-    TEST_INTERVAL: 1
-    SAMPLE_TIMES: 3
-    GEN_INTERVAL: 1
-    SAVE_INTERVAL: 1
-    ALPHA: 0.8
-
-# Image options
 IMAGE:
     TARGET_SIZE: 256
     SAVE_IMAGE: True
     INTERPOLATION: 'bilinear'
     COLOR_FORMAT: 'RGB'
     PROCESSING_BACKEND: 'pil'
-    SAVE_PERIOD: 1
+    SAVE_PERIOD: 5
+
+# Evaluation options
+EVAL:
+    TEST_INTERVAL: 1
+    SAMPLE_TIMES: 3
+    GEN_INTERVAL: 5
+    SAVE_INTERVAL: 10
+    ALPHA: 0.8
 
 # Directories
 SAMPLES_DIR: './samples'
@@ -68,22 +66,23 @@ channels_noise: 100
 ngf: 64
 ndf: 64
 z_distribution: 'normal'
-npz_path: 'C:\Users\nanda\OneDrive\Desktop\DF-GAN\data\flower\npz\flower_val256_FIDK0_1155.npz'
+npz_path: 'data/flower/npz/flower_val.npz'
 
 # Runtime parameters
 manual_seed: 100
 cuda: True
 device: 'cuda'
 truncation: True
-trunc_rate: 0.92
+trunc_rate: 0.8
 generator_init: 'xavier'
 discriminator_init: 'xavier'
 sample_times: 1
 test_interval: 1
-gen_interval: 1
-save_interval: 1
+gen_interval: 5
+save_interval: 5
 val_save_dir: './eval_results'
 samples_save_dir: './samples'
-nf: 32
+nf: 64
 cond_dim: 256
+ch_size: 3
 ch_size: 3
