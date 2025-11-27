@@ -1,23 +1,8 @@
 
-# DF-GAN: A Simple and Effective Baseline for Text-to-Image Synthesis 
+# DF-GAN: A Deep-Fusion Generative Adversarial Network for Text-to-Image Generation
+DF-GAN is a simple but powerful text-to-image model that synthesizes images (256 x 256 dimension) directly from natural language descriptions.
+This repository includes dataset preparation, DAMSM encoders, training scripts, sampling utilities, and evaluation pipelines (FID & optional CLIP alignment).
 
-Official Pytorch implementation for our paper [DF-GAN: A Simple and Effective Baseline for Text-to-Image Synthesis](https://arxiv.org/abs/2008.05865) by [Ming Tao](https://scholar.google.com/citations?user=5GlOlNUAAAAJ), [Hao Tang](https://scholar.google.com/citations?user=9zJkeEMAAAAJ&hl=en), [Fei Wu](https://scholar.google.com/citations?user=tgeCjhEAAAAJ&hl=en), [Xiao-Yuan Jing](https://scholar.google.com/citations?hl=en&user=2IInQAgAAAAJ), [Bing-Kun Bao](https://scholar.google.com/citations?user=lDppvmoAAAAJ&hl=en), [Changsheng Xu](https://scholar.google.com/citations?user=hI9NRDkAAAAJ). 
-
-<img src="framework.png" width="804px" height="380px"/>
-
-
-## Requirements
-- python 3.8
-- Pytorch 1.9
-- At least 1x12GB NVIDIA GPU
-## Installation
-
-Clone this repo.
-```
-git clone https://github.com/tobran/DF-GAN
-pip install -r requirements.txt
-cd DF-GAN/code/
-```
 
 ## Preparation
 ### Datasets
@@ -25,49 +10,92 @@ cd DF-GAN/code/
 2. Download the [birds](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) image data. Extract them to `data/birds/`
 3. Download [coco2014](http://cocodataset.org/#download) dataset and extract the images to `data/coco/images/`
 
+## Model Overview (Integrated DF-GAN Architecture)
+DF-GAN is designed to convert text descriptions into high-quality images using a compact but powerful architecture. Below is the full breakdown of its internal components.
+
+### Inputs
+• Text prompts tokenized via DAMSM vocabulary <br>
+• Noise vector (z): <br>
+ &nbsp;&nbsp; -> default z_dim = 100 <br>
+ &nbsp;&nbsp; -> batch size = 20 <br>
+ &nbsp;&nbsp; -> truncation = 0.88 <br>
+ &nbsp;&nbsp; -> manual_seed <br>
+ &nbsp;&nbsp; -> encoder_epoch <br>
+• Dataset-specific encoders: <br>
+ &nbsp;&nbsp; -> DAMSM text encoder <br>
+ &nbsp;&nbsp; -> DAMSM image encoder <br>
+
+ ### Outputs
+ • PNG images normalized from [-1,1] → [0,255] <br>
+ • Periodic training grids & checkpoints in saved_models/ <br>
+ • Evaluation artifacts: <br>
+&nbsp;&nbsp; -> FID (2048-d InceptionV3 features vs .npz) <br>
+&nbsp;&nbsp; -> Optional CLIP alignment grid + cosine similarity (ViT-B/32) <br>
+
+## Key Components
+### 1. Text Encoder <br>
+ • Bi-LSTM <br>
+ • Produces 256-dim word embeddings and 256-dim sentence embeddings <br>
+
+### 2. Image Encoder <br>
+ • Inception v3 backbone <br>
+ • Projects images → 256-dim embeddings <br>
+
+ ### 3. Generator <br>
+ 
+ • Pipeline: <br>
+ &nbsp;&nbsp; z → FC → 8·nf·4×4 → multiple G_Blocks (upsampling) → to_rgb → Tanh <br>
+ • Text Conditioning :  <br>
+&nbsp;&nbsp;   -> Uses DFBLK + Affine modulation <br>
+&nbsp;&nbsp;   -> Concatenates [z, sentence embedding] <br>
+ &nbsp;&nbsp;  -> Affine-modulates feature maps inside each block <br>
+
+  ### 4. Discriminator <br>
+ 
+ • NetD :  <br>
+&nbsp;&nbsp;   -> Multi-scale CNN <br>
+&nbsp;&nbsp;   -> Downsampling using D_Block <br>
+• NetC :  <br>
+&nbsp;&nbsp;   -> Concatenates Image features and Spatially replicated sentence embedding <br>
+&nbsp;&nbsp;   -> Outputs conditional real/fake logit <br>
+• Loss & Regularization:  <br>
+&nbsp;&nbsp;   -> Hinge loss <br>
+&nbsp;&nbsp;   -> Mismatched text negatives <br>
+&nbsp;&nbsp;   -> MAGP (Matching-Aware Gradient Penalty) <br>
+• Stabilization:  <br>
+&nbsp;&nbsp;   -> EMA (Exponential Moving Average) of generator weights <br>
+&nbsp;&nbsp;   -> EMA used for sampling and FID <br>
+
+## Evaluation 
+### Frechet Inception Distance (FID)
+&nbsp;&nbsp;   -> 2048-dim InceptionV3 features <br>
+&nbsp;&nbsp;   -> Compares to dataset .npz stats <br>
+
+### Optional CLIP Alignment
+&nbsp;&nbsp;   -> Generates grid of text → image samples <br>
+&nbsp;&nbsp;   -> Computes cosine scores via CLIP ViT-B/32 <br>
+&nbsp;&nbsp;   -> Saved in alignment_samples/ <br>
 
 ## Training
   ```
   cd DF-GAN/code/
   ```
 ### Train the DF-GAN model
-  - For bird dataset: `bash scripts/train.sh ./cfg/bird.yml`
-  - For coco dataset: `bash scripts/train.sh ./cfg/coco.yml`
+  - For bird dataset: `scripts/train.bat ./cfg/bird.yml`
+  - For coco dataset: `scripts/train.bat ./cfg/coco.yml`
+    
 ### Resume training process
-If your training process is interrupted unexpectedly, set **resume_epoch** and **resume_model_path** in train.sh to resume training.
-
-### TensorBoard
-Our code supports automate FID evaluation during training, the results are stored in TensorBoard files under ./logs. You can change the test interval by changing **test_interval** in the YAML file.
-  - For bird dataset: `tensorboard --logdir=./code/logs/bird/train --port 8166`
-  - For coco dataset: `tensorboard --logdir=./code/logs/coco/train --port 8177`
-
-## Evaluation
-
-### Download Pretrained Model
-- [DF-GAN for bird](https://drive.google.com/file/d/1rzfcCvGwU8vLCrn5reWxmrAMms6WQGA6/view?usp=sharing). Download and save it to `./code/saved_models/bird/`
-- [DF-GAN for coco](https://drive.google.com/file/d/1e_AwWxbClxipEnasfz_QrhmLlv2-Vpyq/view?usp=sharing). Download and save it to `./code/saved_models/coco/`
-
-### Evaluate DF-GAN models
-We synthesize about 3w images from the test descriptions and evaluate the FID between **synthesized images** and **test images** of each dataset.
-  ```
-  cd DF-GAN/code/
-  ```
-- For bird dataset: `bash scripts/calc_FID.sh ./cfg/bird.yml`
-- For coco dataset: `bash scripts/calc_FID.sh ./cfg/coco.yml`
-- We compute inception score for models trained on birds using [StackGAN-inception-model](https://github.com/hanzhanggit/StackGAN-inception-model). 
+If your training process is interrupted unexpectedly, set **resume_epoch** and **resume_model_path** in train.bat to resume training.
 
 ### Some tips
 - Our evaluation codes do not save the synthesized images (about 3w images). If you want to save them, set **save_image: True** in the YAML file.
-- Since we find that the IS can be overfitted heavily through Inception-V3 jointed training, we do not recommend the IS metric for text-to-image synthesis.
 
 ### Performance
-The released model achieves better performance than the CVPR paper version.
 
 
-| Model | CUB-FID↓ | COCO-FID↓ |NOP↓ |
-| --- | --- | --- | --- |
-| DF-GAN(paper) | 14.81 | 19.32 | 19M |
-| DF-GAN(pretrained model) | **12.10** | **15.41** | **18M** |
+| Model | CUB-FID↓ | COCO-FID↓ |
+| --- | --- | --- |
+| DF-GAN | **24.71** | **15.41** |
 
 
 
@@ -75,9 +103,6 @@ The released model achieves better performance than the CVPR paper version.
   ```
   cd DF-GAN/code/
   ```
-### Synthesize images from example captions
-  - For bird dataset: `bash scripts/sample.sh ./cfg/bird.yml`
-  - For coco dataset: `bash scripts/sample.sh ./cfg/coco.yml`
   
 ### Synthesize images from your text descriptions
   - Replace your text descriptions into the ./code/example_captions/dataset_name.txt
@@ -86,26 +111,3 @@ The released model achieves better performance than the CVPR paper version.
 
 The synthesized images are saved at ./code/samples.
 
-<img src="selected_samples.jpg" width="804px" height="306px"/>
-
----
-### Citing DF-GAN
-
-If you find DF-GAN useful in your research, please consider citing our paper:
-
-```
-@inproceedings{tao2022df,
-  title={DF-GAN: A Simple and Effective Baseline for Text-to-Image Synthesis},
-  author={Tao, Ming and Tang, Hao and Wu, Fei and Jing, Xiao-Yuan and Bao, Bing-Kun and Xu, Changsheng},
-  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
-  pages={16515--16525},
-  year={2022}
-}
-```
-The code is released for academic research use only. For commercial use, please contact [Ming Tao](mingtao2000@126.com).
-
-**Reference**
-
-- [StackGAN++: Realistic Image Synthesis with Stacked Generative Adversarial Networks](https://arxiv.org/abs/1710.10916) [[code]](https://github.com/hanzhanggit/StackGAN-v2)
-- [AttnGAN: Fine-Grained Text to Image Generation with Attentional Generative Adversarial Networks](https://openaccess.thecvf.com/content_cvpr_2018/papers/Xu_AttnGAN_Fine-Grained_Text_CVPR_2018_paper.pdf) [[code]](https://github.com/taoxugit/AttnGAN)
-- [DM-GAN: Realistic Image Synthesis with Stacked Generative Adversarial Networks](https://arxiv.org/abs/1904.01310) [[code]](https://github.com/MinfengZhu/DM-GAN)
