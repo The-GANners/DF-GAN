@@ -1,117 +1,223 @@
+# 🎨 DF-GAN: Deep-Fusion Generative Adversarial Network
+### *Transform Text into Stunning Images* ✨
 
-# DF-GAN: A Deep-Fusion Generative Adversarial Network for Text-to-Image Generation
-DF-GAN is a simple but powerful text-to-image model that synthesizes images (256 x 256 dimension) directly from natural language descriptions.
-This repository includes dataset preparation, DAMSM encoders, training scripts, sampling utilities, and evaluation pipelines (FID & optional CLIP alignment).
+<div align="center">
+
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.5-orange.svg)
+![Python](https://img.shields.io/badge/Python-3.9-green.svg)
+![CUDA](https://img.shields.io/badge/CUDA-Enabled-brightgreen.svg)
+
+</div>
+
+---
+
+## 📖 Overview
+
+**DF-GAN** is a powerful text-to-image synthesis model that generates high-quality **256×256** images directly from natural language descriptions. This repository provides everything you need: dataset preparation, DAMSM encoders, training scripts, sampling utilities, and comprehensive evaluation pipelines.
+
+> 💡 **Key Features:** Simple architecture, powerful results, FID evaluation, and optional CLIP alignment scoring
+
+---
+
+## 🚀 Getting Started
+
+### 📦 Dataset Preparation
+
+Follow these steps to set up your datasets:
+
+#### 1️⃣ **Download Preprocessed Metadata**
+- 🐦 [**Birds Dataset**](https://drive.google.com/file/d/1I6ybkR7L64K8hZOraEZDuHh0cCJw5OUj/view?usp=sharing) → Extract to `data/`
+- 🖼️ [**COCO Dataset**](https://drive.google.com/file/d/15Fw-gErCEArOFykW3YTnLKpRcPgI_3AB/view?usp=sharing) → Extract to `data/`
+
+#### 2️⃣ **Download Image Data**
+- 🐦 [**Birds Images**](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) → Extract to `data/birds/`
+- 🖼️ [**COCO2014 Images**](http://cocodataset.org/#download) → Extract to `data/coco/images/`
+
+---
+
+## 🏗️ Model Architecture
+
+### 🔄 Input Pipeline
+
+| Component | Description |
+|-----------|-------------|
+| 📝 **Text Prompts** | Tokenized via DAMSM vocabulary |
+| 🎲 **Noise Vector (z)** | `z_dim = 100`, batch size = 20, truncation = 0.88 |
+| 🔤 **DAMSM Encoders** | Text encoder + Image encoder |
+
+### 🎯 Output Pipeline
+
+| Output Type | Details |
+|-------------|---------|
+| 🖼️ **Generated Images** | PNG format, normalized from [-1, 1] → [0, 255] |
+| 💾 **Checkpoints** | Periodic saves in `saved_models/` |
+| 📊 **Evaluation Metrics** | FID scores & CLIP alignment (optional) |
+
+---
+
+## ⚙️ Key Components
+
+### 🧠 1. Text Encoder
+- **Architecture:** Bi-LSTM  
+- **Output:** 256-dim word embeddings + 256-dim sentence embeddings  
+- **Purpose:** Converts text descriptions into semantic vectors
+
+### 🖼️ 2. Image Encoder
+- **Backbone:** Inception v3  
+- **Output:** 256-dim image embeddings  
+- **Purpose:** Projects images into shared embedding space
+
+### 🎨 3. Generator Network
+📥 Input (z) → 🔄 FC Layer → 📈 8·nf·4×4 → 🔁 G_Blocks (upsampling) → 🎨 RGB → ✅ Tanh
+**Text Conditioning Features:**
+- ✨ DFBLK + Affine modulation
+- 🔗 Concatenates [z, sentence embedding]
+- 🎛️ Affine-modulates feature maps in each block
+
+### 🛡️ 4. Discriminator Network
+
+#### **NetD (Image Discriminator)**
+- 🌐 Multi-scale CNN architecture
+- 📉 Downsampling via D_Block modules
+
+#### **NetC (Conditional Discriminator)**
+- 🔀 Combines image features + sentence embeddings
+- ✔️ Outputs conditional real/fake logits
+
+#### **Training Stabilization**
+| Technique | Purpose |
+|-----------|---------|
+| ⚖️ **Hinge Loss** | Stable adversarial training |
+| ❌ **Mismatched Negatives** | Better text-image alignment |
+| 🎯 **MAGP** | Matching-Aware Gradient Penalty |
+| 📊 **EMA** | Exponential Moving Average for stable sampling |
+
+---
+
+## 📊 Evaluation Metrics
+
+### 📈 Fréchet Inception Distance (FID)
+- Uses 2048-dim InceptionV3 features
+- Compares generated images to dataset `.npz` statistics
+- **Lower is better** ⬇️
+
+### 🤝 CLIP Alignment (Optional)
+- Generates text-to-image sample grids
+- Computes cosine similarity via CLIP ViT-B/32
+- Results saved in `alignment_samples/`
+
+---
+
+## 🎓 Training
+
+### 💻 Environment Setup
+
+| Component | Specification |
+|-----------|---------------|
+| 🐍 **Python** | 3.9 |
+| 🔥 **PyTorch** | 2.5 with CUDA |
+| 🎮 **GPU** | NVIDIA GeForce RTX 4070 (12GB VRAM) |
+
+### 🏃 Start Training
+
+Navigate to the code directory:
+```bash
+cd DF-GAN/code/
+```
+
+#### 🐦 **For Birds Dataset:**
+```bash
+scripts/train.bat ./cfg/bird.yml
+```
+
+#### 🖼️ **For COCO Dataset:**
+```bash
+scripts/train.bat ./cfg/coco.yml
+```
+
+### 🔄 Resume Training
+
+If training is interrupted, configure these parameters in `train.bat`:
+- `resume_epoch` → Epoch number to resume from
+- `resume_model_path` → Path to checkpoint file
+
+### 💡 Pro Tips
+
+> ⚠️ **Note:** Our evaluation codes don't save synthesized images by default (~30,000 images).  
+> To save them, set `save_image: True` in your YAML configuration file.
+
+---
+
+## 🏆 Performance Benchmarks
+
+<div align="center">
+
+| 🗂️ Dataset | 📊 FID Score ⬇️ | ⏱️ Epochs |
+|------------|----------------|----------|
+| 🐦 **CUB (Birds)** | **24.71** | 230 |
+| 🖼️ **MS-COCO** | **15.4** | 290 |
+
+</div>
+
+---
+
+## 🎨 Image Sampling
+
+### 🖼️ Generate Images from Text
+
+1️⃣ **Navigate to code directory:**
+```bash
+cd DF-GAN/code/
+```
+
+2️⃣ **Prepare your text descriptions:**
+- Edit `./code/example_captions/dataset_name.txt`
+- Add your custom captions (one per line)
+
+3️⃣ **Run sampling:**
+
+#### 🐦 **For Birds:**
+```bash
+ python src/sample.py --cfg cfg/bird.yml
+```
+
+#### 🖼️ **For COCO:**
+```bash
+ python src/sample.py --cfg cfg/coco.yml
+```
+
+### 📁 Output Location
+Generated images are saved in: `./code/samples/`
+
+---
 
 
-## Preparation
-### Datasets
-1. Download the preprocessed metadata for [birds](https://drive.google.com/file/d/1I6ybkR7L64K8hZOraEZDuHh0cCJw5OUj/view?usp=sharing) [coco](https://drive.google.com/file/d/15Fw-gErCEArOFykW3YTnLKpRcPgI_3AB/view?usp=sharing) and extract them to `data/`
-2. Download the [birds](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) image data. Extract them to `data/birds/`
-3. Download [coco2014](http://cocodataset.org/#download) dataset and extract the images to `data/coco/images/`
+## 📄 License
 
-## Model Overview (Integrated DF-GAN Architecture)
-DF-GAN is designed to convert text descriptions into high-quality images using a compact but powerful architecture. Below is the full breakdown of its internal components.
+This project is released under the MIT License.
 
-### Inputs
-• Text prompts tokenized via DAMSM vocabulary <br>
-• Noise vector (z): <br>
- &nbsp;&nbsp; -> default z_dim = 100 <br>
- &nbsp;&nbsp; -> batch size = 20 <br>
- &nbsp;&nbsp; -> truncation = 0.88 <br>
- &nbsp;&nbsp; -> manual_seed <br>
- &nbsp;&nbsp; -> encoder_epoch <br>
-• Dataset-specific encoders: <br>
- &nbsp;&nbsp; -> DAMSM text encoder <br>
- &nbsp;&nbsp; -> DAMSM image encoder <br>
+---
 
- ### Outputs
- • PNG images normalized from [-1,1] → [0,255] <br>
- • Periodic training grids & checkpoints in saved_models/ <br>
- • Evaluation artifacts: <br>
-&nbsp;&nbsp; -> FID (2048-d InceptionV3 features vs .npz) <br>
-&nbsp;&nbsp; -> Optional CLIP alignment grid + cosine similarity (ViT-B/32) <br>
+## 🤝 Contributing
 
-## Key Components
-### 1. Text Encoder <br>
- • Bi-LSTM <br>
- • Produces 256-dim word embeddings and 256-dim sentence embeddings <br>
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-### 2. Image Encoder <br>
- • Inception v3 backbone <br>
- • Projects images → 256-dim embeddings <br>
+---
 
- ### 3. Generator <br>
- 
- • Pipeline: <br>
- &nbsp;&nbsp; z → FC → 8·nf·4×4 → multiple G_Blocks (upsampling) → to_rgb → Tanh <br>
- • Text Conditioning :  <br>
-&nbsp;&nbsp;   -> Uses DFBLK + Affine modulation <br>
-&nbsp;&nbsp;   -> Concatenates [z, sentence embedding] <br>
- &nbsp;&nbsp;  -> Affine-modulates feature maps inside each block <br>
+## 📧 Contact
 
-  ### 4. Discriminator <br>
- 
- • NetD :  <br>
-&nbsp;&nbsp;   -> Multi-scale CNN <br>
-&nbsp;&nbsp;   -> Downsampling using D_Block <br>
-• NetC :  <br>
-&nbsp;&nbsp;   -> Concatenates Image features and Spatially replicated sentence embedding <br>
-&nbsp;&nbsp;   -> Outputs conditional real/fake logit <br>
-• Loss & Regularization:  <br>
-&nbsp;&nbsp;   -> Hinge loss <br>
-&nbsp;&nbsp;   -> Mismatched text negatives <br>
-&nbsp;&nbsp;   -> MAGP (Matching-Aware Gradient Penalty) <br>
-• Stabilization:  <br>
-&nbsp;&nbsp;   -> EMA (Exponential Moving Average) of generator weights <br>
-&nbsp;&nbsp;   -> EMA used for sampling and FID <br>
+For questions and feedback:
+- 📮 Open an issue on GitHub
+- 💬 Join our community discussions
 
-## Evaluation 
-### Frechet Inception Distance (FID)
-&nbsp;&nbsp;   -> 2048-dim InceptionV3 features <br>
-&nbsp;&nbsp;   -> Compares to dataset .npz stats <br>
+---
 
-### Optional CLIP Alignment
-&nbsp;&nbsp;   -> Generates grid of text → image samples <br>
-&nbsp;&nbsp;   -> Computes cosine scores via CLIP ViT-B/32 <br>
-&nbsp;&nbsp;   -> Saved in alignment_samples/ <br>
+<div align="center">
 
-## Training
-  ```
-  cd DF-GAN/code/
-  ```
-### Train the DF-GAN model
-  - For bird dataset: `scripts/train.bat ./cfg/bird.yml`
-  - For coco dataset: `scripts/train.bat ./cfg/coco.yml`
+### ⭐ If you find this project useful, please consider giving it a star! ⭐
 
-### Training Environment
-Our model was trained using **PyTorch 2.5** with **CUDA support**, running on **Python 3.9** with all required dependencies, using an **NVIDIA GeForce RTX 4070 (12GB VRAM)** GPU.
-    
-### Resume training process
-If your training process is interrupted unexpectedly, set **resume_epoch** and **resume_model_path** in train.bat to resume training.
+**Made with ❤️ by the GANners Team**
 
-### Some tips
-- Our evaluation codes do not save the synthesized images (about 3w images). If you want to save them, set **save_image: True** in the YAML file.
-
-### Performance
-
-
-| Dataset↓ | FID↓ | Epochs↓ |
-| --- |  --- |  --- | 
-CUB | **24.71** | 230 |
-MS-COCO | **15.4** | 290 |
-
-
-
-## Sampling
-  ```
-  cd DF-GAN/code/
-  ```
-  
-### Synthesize images from your text descriptions
-  - Replace your text descriptions into the ./code/example_captions/dataset_name.txt
-  - For bird dataset: `bash scripts/sample.sh ./cfg/bird.yml`
-  - For coco dataset: `bash scripts/sample.sh ./cfg/coco.yml`
-
-The synthesized images are saved at ./code/samples.
+</div>
 
