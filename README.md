@@ -83,6 +83,9 @@ DF-GAN is designed to convert text descriptions into high-quality images using a
 ### Train the DF-GAN model
   - For bird dataset: `scripts/train.bat ./cfg/bird.yml`
   - For coco dataset: `scripts/train.bat ./cfg/coco.yml`
+
+### Training Environment
+Our model was trained using **PyTorch 2.5** with **CUDA support**, running on **Python 3.9** with all required dependencies, using an **NVIDIA GeForce RTX 4070 (12GB VRAM)** GPU.
     
 ### Resume training process
 If your training process is interrupted unexpectedly, set **resume_epoch** and **resume_model_path** in train.bat to resume training.
@@ -93,9 +96,10 @@ If your training process is interrupted unexpectedly, set **resume_epoch** and *
 ### Performance
 
 
-| Model | CUB-FID↓ | COCO-FID↓ |
-| --- | --- | --- |
-| DF-GAN | **24.71** | **15.41** |
+| Dataset↓ | FID↓ | Epochs↓ |
+| --- |  --- |  --- | 
+CUB | **24.71** | 230 |
+MS-COCO | **15.4** | 290 |
 
 
 
