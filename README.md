@@ -69,7 +69,8 @@ Follow these steps to set up your datasets:
 - **Purpose:** Projects images into shared embedding space
 
 ### 🎨 3. Generator Network
-📥 Input (z) → 🔄 FC Layer → 📈 8·nf·4×4 → 🔁 G_Blocks (upsampling) → 🎨 RGB → ✅ Tanh
+📥 Input (z) → 🔄 FC Layer → 📈 8·nf·4×4 → 🔁 G_Blocks (upsampling) → 🎨 RGB → ✅ Tanh <br>
+
 **Text Conditioning Features:**
 - ✨ DFBLK + Affine modulation
 - 🔗 Concatenates [z, sentence embedding]
